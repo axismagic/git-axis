@@ -1,0 +1,235 @@
+=head1 NAME
+
+git-axis - Collaborative porcelain for git
+
+=head1 SYNOPSIS
+
+    git axis --version
+    git axis [<axis>] [arguments]
+    git axis [<axis>] <command> [arguments]
+
+=head1 DESCRIPTION
+
+Git Axis makes centralized teamwork yet decentralized development easier by
+following a number of "sane defaults" conventions and adding porcelain tools
+leveraging those.
+
+If there is only one axis, providing <axis> is optional and defaults to that
+one axis.
+
+Without a <command>, git axis lists axes it knows about. See COMMANDS
+for each command role and behavior.
+
+=head1 GENERAL TERMINOLOGY
+
+An B<axis> is a (local or remote) location holding repositories for multiple
+users. The axis is defined by its url and - once set up - has a short name
+attached to it via git configuration. Multiple axes can be defined, and when a
+single one is present it is customary to name it B<default>.
+
+An B<axis user> is a user who manages a number of repositories on the axis.
+
+An B<axis repository> is a bare git repository under control of a given user.
+
+The manner in which such repositories and users are organized in the axis is
+called the B<layout>.
+
+A B<fork> is a direct clone of an axis repository from a user to another. To
+keep things simple, forks are grouped together by their name.
+
+=head1 LAYOUTS
+
+While git-axis can be used with a locally stored axis, it is generally not the
+most useful case. A typical set up will have the axis located on a remote
+server, shared by multiple users.
+
+=head2 System Layout
+
+Each axis user has a corresponding system user on the server. Every user uses
+its $HOME or a same-named subdirectory (such as B<axis>) as a repository
+container. All users homes live in the same directory: this is typically B</home> or
+B</Users>, but others like B</var/axis> are perfectly possible.
+
+Since each user has filesystem rights to his home and repos, access
+control is done using system rights management. It is up to the system
+administrator to create users and ensure their home is properly located.
+
+PROS: Requires no particular setup on the server side.
+
+CONS: Git remote names of other users either have a relative or an absolute
+path, which makes the abstraction leaky. Since creating users needs root
+access, care must be taken.
+
+=head2 Hub Layout
+
+Each axis user accesses the server via a single system user (such as B<git> or
+B<axis>) and is identified by its SSH public key. This single user's home holds
+every axis user's directory. Access control is handled by magic triggered by
+the pubkey.
+
+PROS: Git and axis functionality is isolated from system management. Repos can
+be trivially served over HTTP.
+
+CONS: Needs magic to be set up.
+
+=head1 COMMAND TERMINOLOGY
+
+git-axis follows git(1) terminology and adds:
+
+=over
+
+=item <axis>
+
+Indicates the axis to be used by its name as registered in git config. In
+some cases it can be replaced by the axis url.
+
+=item <user>
+
+Indicates a username of a given axis user. An axis user is stored as a depth
+one directory under an axis root.
+
+=item <repository>
+
+Indicates a local or axis repository by its name, i.e its containing folder. An
+axis repository is a bare git repository living in an axis user's directory.
+If <repository> contains a slash, it is assumed that its form is
+<user>/<repository>, and thus a reference to <user>'s fork of <repository>.
+
+=back
+
+=head1 COMMANDS
+
+=over
+
+=item show [<user>]
+
+Show all repositories of the given user.
+
+If no user is given, show all users on the axis. The currently recognized
+user is shown prepended with a star.
+
+=item remotes [<repository>] [--set <user] [--set-all] [--prune]
+
+Show forks of the given repository in the known axes.
+
+If no repository is given, heuristics will be applied to determine the
+local repository name.
+
+With --set <user>, set a remote for a fork of this repository, which will be named after
+the user.
+
+With --set-all, set remotes for all forks of this repository, which will be named after
+their respective axis users.
+
+With --prune, removes all remotes that point to nonexistent forks.
+
+=item init [--clone] [<repository>]
+
+Creates a new axis repository.
+
+With --clone, also clones the newly created repository locally.
+
+If no repository is given and current working directory is a local git
+repository, also sets the local repository's origin remote to the user's axis
+repository.
+
+=item fork [--clone] <repository>
+
+Creates a new axis repository from another user's existing repository.
+
+With --clone, also clones the repository locally
+
+=item clone [--fork] <repository>
+
+Clones an existing axis repository locally.
+
+With --fork, also forks the repository.
+
+=back
+
+=head1 NAMING HEURISTICS
+
+=head2 User's Name
+
+A user's name is derived from, in order of higher priority:
+
+=over
+
+=item -
+axis config key user
+
+=item -
+git remote's user matching this axis/repo (if pwd is a git repo)
+
+=item -
+ssh user config for this host
+
+=item -
+whoami
+
+=back
+
+=head2 Local Repository Name
+
+A local repository name is derived from, in order of higher priority:
+
+=over
+
+=item -
+axis config key repository.name
+
+=item -
+git remote's matching this axis
+
+=item -
+git's working directory name
+
+=back
+
+=head1 FILES
+
+All configuration on the local side is done with git-config(1), thus system,
+global and local git configuration can be liberally used to achieve interesting
+effects.
+
+No configuration is currently needed on the server side. That said, if a need
+for configuration ever arises, it would be stored in a file named .axisconfig
+located at the axis root.
+
+=head1 CONFIGURATION
+
+=over
+
+=item axis.<axis>.url
+
+Url for axis whose name is <axis>.
+
+=item axis.<axis>.user
+
+Name identifying the axis user.
+
+=item axis.<axis>.repository
+
+Name identifying the axis repository.
+
+WARNING: Setting this as --global or --system is evil.
+
+=back
+
+=head1 CAVEAT
+
+This is an early release, bugs are present and features are incomplete.
+
+=head1 BUGS
+
+See Issues on L<Github|https://github.com/lloeki/git-axis/issues>
+
+Also, see CAVEAT.
+
+=head1 AUTHORS
+
+Loic Nageleisen
+
+=head1 SEE ALSO
+
+git(1), git-remote(1), git-config(1)

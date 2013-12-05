@@ -1,0 +1,158 @@
+#!/usr/bin/perl
+
+#!/usr/bin/perl -l /usr/local/opt/git/lib/perl5/site_perl
+#export PERL5LIB=/usr/local/opt/git/lib/perl5/site_perl
+use lib '/usr/local/opt/git/lib/perl5/site_perl';
+
+use 5.008;
+use strict;
+use warnings;
+use Git;
+
+# from git-add--interactive => GPL
+
+binmode(STDOUT, ":raw");
+
+my $repo = Git->repository();
+
+my $menu_use_color = $repo->get_colorbool('color.interactive');
+my ($prompt_color, $header_color, $help_color) =
+        $menu_use_color ? (
+                $repo->get_color('color.interactive.prompt', 'bold blue'),
+                $repo->get_color('color.interactive.header', 'bold'),
+                $repo->get_color('color.interactive.help', 'red bold'),
+        ) : ();
+my $error_color = ();
+if ($menu_use_color) {
+        my $help_color_spec = ($repo->config('color.interactive.help') or
+                                'red bold');
+        $error_color = $repo->get_color('color.interactive.error',
+                                        $help_color_spec);
+}
+my $normal_color = $repo->get_color("", "reset");
+
+sub colored {
+        my $color = shift;
+        my $string = join("", @_);
+
+        if (defined $color) {
+                # Put a color code at the beginning of each line, a reset at the end
+                # color after newlines that are not at the end of the string
+                $string =~ s/(\n+)(.)/$1$color$2/g;
+                # reset before newlines
+                $string =~ s/(\n+)/$normal_color$1/g;
+                # codes at beginning and end (if necessary):
+                $string =~ s/^/$color/;
+                $string =~ s/$/$normal_color/ unless $string =~ /\n$/;
+        }
+        return $string;
+}
+
+sub run_cmd_pipe {
+        if ($^O eq 'MSWin32') {
+                my @invalid = grep {m/[":*]/} @_;
+                die "$^O does not support: @invalid\n" if @invalid;
+                my @args = map { m/ /o ? "\"$_\"": $_ } @_;
+                return qx{@args};
+        } else {
+                my $fh = undef;
+                open($fh, '-|', @_) or die;
+                return <$fh>;
+        }
+}
+
+my ($GIT_DIR) = run_cmd_pipe(qw(git rev-parse --git-dir));
+
+if (!defined $GIT_DIR) {
+        exit(1); # rev-parse would have already said "not a git repo"
+}
+chomp($GIT_DIR);
+
+sub error_msg {
+        print STDERR colored $error_color, @_;
+}
+
+# end GPL
+
+# functions
+
+sub axis_url {
+    return $repo->config('axis.root.url')
+}
+
+# commands
+
+sub usage {
+    print STDERR "usage: foo\n";
+    print STDERR "   or: bar\n";
+}
+
+sub command_error {
+    my $command = shift;
+    print STDERR "error: unknown subcommand: ${command}\n";
+    usage();
+    exit 1;
+}
+
+sub axis {
+    # show axis root of user/repo tree
+    print(axis_url . "\n");
+}
+
+sub show {
+    # show all users
+    # $user: show user's remotes
+    my $user = $ARGV[1] || '';
+    # TODO: test user existence and return message
+    system("ls -1 " . axis_url . '/' . $user . ' | cat');
+}
+
+sub remotes {
+    # $repo: list all remotes having this repo
+    my $repo = $ARGV[1] || undef;
+    # ! in a git repo only
+    # list all remotes having cloned this repo
+    # TODO: pwd is wrong
+    $repo ||= `basename \$(pwd)`;
+    chomp($repo);
+    system("cd " . axis_url . " && ls -1d */" . $repo . "{,.git} 2> /dev/null | cat");
+    # --set: set missing remotes
+    # --prune: remove obsolete remotes
+}
+
+sub init {
+    # create repo and set origin remote if in repo
+    # - ssh $root
+    # - git init --bare $repo.git
+    # --clone: same as above + clone
+    # --shared: create shared repo and set upstream remote
+    # - ssh $root
+    # - cd /var/git
+    # - sudo git init --bare $repo.git --shared=group
+    # - sudo chown -R www-data:developpeurs $repo
+    # --fork: same as above but fork
+    # --clone: same as --shared + clone
+}
+
+sub fork {
+    # clone $repo from $user to my remote
+}
+
+sub clone {
+    # fork and clone locally, and set remotes
+}
+
+# arg => command dispatch
+
+my %commands = (
+    ''          => \&axis,
+    'show'      => \&show,
+    'remotes'    => \&remotes,
+    'init'      => \&init,
+    'clone'     => \&clone,
+);
+
+unless (caller) {
+    my $command = $ARGV[0] || '';
+    ($commands{$command} || sub { command_error($command) })->();
+}
